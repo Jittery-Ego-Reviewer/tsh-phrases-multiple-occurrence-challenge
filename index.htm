@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>叉音大挑戰！</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans HK', sans-serif;
+            background-color: #f0f9ff;
+            user-select: none;
+            overflow-x: hidden;
+        }
+        .board-grid {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            gap: 2px;
+            background-color: #cbd5e1;
+            padding: 4px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+        .cell {
+            position: relative;
+            background-color: #ffffff;
+            border-radius: 8px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.5rem;
+            transition: all 0.2s;
+        }
+        .cell-number {
+            position: absolute;
+            top: 2px;
+            left: 4px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            color: #64748b;
+        }
+        /* Color coding for challenges */
+        .cell-trap { background-color: #e9d5ff; } /* Random trap blocks */
+        .cell-mini { background-color: #fef08a; } /* 2 multiples */
+        .cell-hard { background-color: #fecaca; } /* 5 multiples */
+        
+        .avatar {
+            font-size: 1.8rem;
+            line-height: 1;
+            margin: 1px;
+            filter: drop-shadow(2px 4px 2px rgba(0,0,0,0.2));
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 10;
+        }
+        .bounce {
+            animation: bounce 0.4s;
+        }
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-15px) scale(1.2); }
+        }
+        
+        .dice-anim {
+            animation: shake 0.5s infinite;
+        }
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            10% { transform: translate(-1px, -2px) rotate(-10deg); }
+            20% { transform: translate(-3px, 0px) rotate(10deg); }
+            30% { transform: translate(3px, 2px) rotate(0deg); }
+            40% { transform: translate(1px, -1px) rotate(10deg); }
+            50% { transform: translate(-1px, 2px) rotate(-10deg); }
+            60% { transform: translate(-3px, 1px) rotate(0deg); }
+            70% { transform: translate(3px, 1px) rotate(-10deg); }
+            80% { transform: translate(-1px, -1px) rotate(10deg); }
+            90% { transform: translate(1px, 2px) rotate(0deg); }
+            100% { transform: translate(1px, -2px) rotate(-10deg); }
+        }
+
+        /* Modal styling */
+        .glass-modal {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center py-6 px-4">
+
+    <!-- Header -->
+    <header class="text-center mb-6 w-full max-w-3xl">
+        <h1 class="text-3xl md:text-4xl font-black text-blue-600 mb-2 drop-shadow-md">🎲 叉音大挑戰 🎲</h1>
+        <p class="text-lg text-gray-700 font-bold bg-white inline-block px-4 py-1 rounded-full shadow-sm">叉音大挑戰</p>
+    </header>
+
+    <!-- Setup Screen -->
+    <div id="setup-screen" class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center">
+        <div id="player-count-selection">
+            <h2 class="text-2xl font-bold mb-6 text-gray-800">選擇人數</h2>
+            <div class="flex justify-center gap-4 mb-6">
+                <button onclick="selectPlayerCount(2)" class="btn-setup bg-blue-100 hover:bg-blue-200 text-blue-800 font-bold py-3 px-6 rounded-lg text-xl transition">2 人</button>
+                <button onclick="selectPlayerCount(3)" class="btn-setup bg-blue-100 hover:bg-blue-200 text-blue-800 font-bold py-3 px-6 rounded-lg text-xl transition">3 人</button>
+            </div>
+        </div>
+        <div id="avatar-selection" class="hidden">
+            <h2 id="choosing-player-text" class="text-2xl font-bold mb-6 text-gray-800">請選擇玩家的角色</h2>
+            <div id="avatar-grid" class="flex flex-wrap justify-center gap-4 mb-6">
+                <!-- Avatars injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="game-screen" class="hidden w-full max-w-5xl flex-col lg:flex-row items-center lg:items-start justify-center gap-8">
+        
+        <!-- Board (Left Side) -->
+        <div class="w-full aspect-square max-w-[600px] relative">
+            <div id="board" class="board-grid w-full h-full">
+                <!-- Cells generated via JS -->
+            </div>
+        </div>
+
+        <!-- Controls & Status (Right Side) -->
+        <div class="flex flex-col items-center gap-8 lg:mt-8">
+            <!-- Status Panel -->
+            <div class="bg-white p-6 rounded-2xl shadow-md border-4 border-blue-100 flex flex-col items-center min-w-[250px]">
+                <p class="text-xl text-gray-600 font-bold mb-4 border-b-2 border-gray-100 w-full text-center pb-2">輪到：</p>
+                <div class="h-24 flex items-center justify-center">
+                    <p id="current-turn-display" class="text-7xl bounce drop-shadow-lg">🤩</p>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="flex flex-col items-center gap-4 w-full">
+                <button id="roll-btn" onclick="takeTurn()" class="bg-gradient-to-b from-blue-400 to-blue-600 hover:from-blue-500 hover:to-blue-700 active:scale-95 text-white text-3xl font-black py-4 px-8 rounded-full shadow-lg transform transition">
+                    🎲 擲骰子!
+                </button>
+                <div id="dice-result" class="text-3xl lg:text-4xl font-black text-blue-600 h-16 flex items-center justify-center text-center px-4"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Challenge Modal -->
+    <div id="challenge-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4">
+        <div class="glass-modal w-full max-w-lg p-6 rounded-3xl shadow-2xl transform scale-100 text-center border-4 border-yellow-400">
+            <div id="challenge-icon" class="text-6xl mb-2">⚡</div>
+            <h2 id="challenge-title" class="text-3xl font-black text-red-600 mb-4 tracking-wide">任務時間！</h2>
+            
+            <div class="bg-yellow-100 rounded-xl p-4 mb-4 border-2 border-yellow-300">
+                <p class="text-sm font-bold text-gray-500 mb-1">挑戰1：</p>
+                <p id="challenge-task" class="text-2xl font-bold text-gray-800"></p>
+            </div>
+
+            <div class="bg-blue-50 rounded-xl p-4 mb-6 border-2 border-blue-200">
+                <p class="text-sm font-bold text-gray-500 mb-2">挑戰2：朗讀句子！</p>
+                
+                <div class="text-left text-sm font-bold text-gray-700 mb-4 bg-white p-3 rounded-lg border border-blue-100 shadow-sm leading-relaxed">
+                    <p class="mb-2">✅ <span class="text-green-600">接受挑戰：</span>請朗讀以下<strong class="text-xl text-red-500">句子</strong>！</p>
+                    <p>❌ <span class="text-red-500">不接受挑戰 / 失敗：</span>將會退後 1 步</p>
+                </div>
+
+                <div id="challenge-words" class="flex flex-col justify-center gap-2 mb-2 w-full">
+                    <!-- Sentences injected here -->
+                </div>
+            </div>
+
+            <div class="flex gap-4 justify-center">
+                <button onclick="resolveChallenge(false)" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 px-4 rounded-xl text-lg transition shadow-md border-b-4 border-gray-400 leading-tight">
+                    不接受 / 失敗 😭<br><span class="text-sm font-normal text-red-600">(-1步)</span>
+                </button>
+                <button onclick="resolveChallenge(true)" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-xl text-lg transition shadow-md border-b-4 border-green-700 leading-tight">
+                    接受並完成 🎉<br><span class="text-sm font-normal text-green-100">(+1步)</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Win Modal -->
+    <div id="win-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-md p-8 rounded-3xl shadow-2xl text-center border-4 border-yellow-400">
+            <div class="text-8xl mb-4 bounce">🏆</div>
+            <h2 class="text-4xl font-black text-yellow-500 mb-2">恭喜！</h2>
+            <p id="win-message" class="text-2xl font-bold text-gray-700 mb-8">🤩 你贏了！</p>
+            <button onclick="resetGame()" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-8 rounded-full text-xl transition shadow-lg border-b-4 border-blue-700">
+                再玩一次 🔄
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- Game Data ---
+        const availableAvatars = ['🤩', '😈', '🐱', '🐷', '🐸', '👽'];
+        
+        // Updated sentence list from user request
+        const speechWords = [
+            "青青的草原",
+            "輪到我抽籤",
+            "廁所無廁紙",
+            "炒蛋放洋葱",
+            "食多啲蔬菜",
+            "我要食叉燒",
+            "竟然無餐具",
+            "擦膠變晒形",
+            "佢入錯咗廁所",
+            "我個名叫超人",
+            "大家一場親戚",
+            "七十七樽白醋",
+            "我要上海粗炒",
+            "有七條彩虹嘅",
+            "吹笛吹到無氣",
+            "一齊玩猜呈尋",
+            "我唔想出去",
+            "穿過去就有",
+            "電車太慢啦",
+            "小明擦黑板",
+            "去前面睇吓",
+            "呢度無出口",
+            "我唔中意菜心",
+            "打爛咗隻茶杯",
+            "我打算去操場",
+            "我要買清潔劑",
+            "你倒白醋入去",
+            "二十七樽白醋",
+            "三十七片叉燒",
+            "有幾多個朝代",
+            "去操場猜呈尋",
+            "揾唔到出口嘅",
+            "去泳池猜呈尋",
+            "十年無換床單",
+            "踩單車去深圳",
+            "要保護好牙齒",
+            "食多幾條白菜",
+            "刷廁所好辛苦",
+            "七百七十七種昆蟲",
+            "七百七十七種設施",
+            "我唔要用牙刷刷牙"
+        ];
+
+        const miniChallenges = [
+            "細細聲咁讀出嚟",
+            "一路跳，一路讀出嚟",
+            "又快又清楚咁讀",
+            "大聲讀出嚟",
+            "企定定喺門口度朗讀出嚟"
+        ];
+
+        const CHALLENGES_DB = [
+            "唱一首歌（唔可以係有隻雀仔跌落水）",
+            "猜一個謎語：身體長長，兄弟成雙；只會吃菜，不會喝湯",
+            "猜一個謎語：駝背哥哥，牙齒多多，從你頭上，輕輕走過",
+            "心如刀割（猜一字）",
+            "背誦一首詩（可以是靜夜詩）",
+            "講一個笑話",
+            "説説自己的興趣",
+            "説説最近數學堂學的東西",
+            "説説最近英文堂學的東西",
+            "説説最近中文堂學的東西",
+            "説説最近科學堂學的東西",
+            "跳一隻舞",
+            "擺出三個拍攝姿勢",
+            "暫停一輪",
+            "扮企鵝行路（走5步）",
+            "單腳站立10秒",
+            "分享今天開心的事",
+            "用英文説出三種水果名（不可以是Apple）",
+            "説一個秘密",
+            "原地跳 X 吓（不可以有聲）",
+            "單腳跳 X 吓（不可以有聲）",
+            "合埋眼摸自己個鼻 X 次",
+            "用雙手整 X 種唔同嘅聲音",
+            "扮猩猩",
+            "單手整 X 種唔同嘅聲音",
+            "扮整pizza（起碼要有3個步驟）",
+            "放一樣東西喺頭上面，保持平衡 X 秒",
+            "扮螃蟹打橫行 X 步",
+            "鴨仔跳 X 吓",
+            "扮刷牙（由洗牙刷開始)",
+            "數學題：11 x 11 = ?",
+            "數學題：12 x 12 = ?",
+            "數學題：13 x 13 = ?",
+            "星星跳 X 吓",
+            "喺你依家嘅位置成功掉垃圾落垃圾桶入面（1次機會）",
+            "喺呢度揾3樣藍色嘅嘢",
+            "喺呢度揾3樣橙色嘅嘢",
+            "喺呢度揾3樣紅色嘅嘢",
+            "喺呢度揾3樣黃色嘅嘢",
+            "喺呢度揾3樣綠色嘅嘢",
+            "轉3個圈行直線",
+            "下一次見到昆蟲要負責去捉",
+            "唔准眨眼10秒",
+            "吸一啖氣，啊20秒"
+        ];
+
+        // --- Game State ---
+        let players = [];
+        let currentPlayerIndex = 0;
+        let isMoving = false;
+        let audioCtx = null;
+        let numPlayers = 0;
+        let selectedAvatars = [];
+        let tempAvailableAvatars = [...availableAvatars];
+        let currentChallengeWords = [];
+        let trapBlocks = [];
+
+        function shuffleArray(array) {
+            const arr = [...array];
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        }
+
+        function generateTrapBlocks() {
+            const candidates = [];
+            for (let i = 2; i <= 63; i++) {
+                if (i % 2 !== 0 && i % 5 !== 0) {
+                    candidates.push(i);
+                }
+            }
+            const shuffled = shuffleArray(candidates);
+            trapBlocks = shuffled.slice(0, 11);
+        }
+
+        // --- Audio System ---
+        function initAudio() {
+            try {
+                if (!audioCtx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) audioCtx = new AudioContext();
+                }
+                if (audioCtx && audioCtx.state === 'suspended') {
+                    audioCtx.resume().catch(() => {});
+                }
+            } catch (e) {
+                console.warn("Audio context could not be initialized:", e);
+            }
+        }
+
+        function playSound(type) {
+            try {
+                if (!audioCtx || audioCtx.state !== 'running') return;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                const now = audioCtx.currentTime;
+
+                if (type === 'dice') {
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(300, now);
+                    osc.frequency.exponentialRampToValueAtTime(600, now + 0.1);
+                    gain.gain.setValueAtTime(0.1, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                    osc.start(now); osc.stop(now + 0.1);
+                } else if (type === 'step') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(400, now);
+                    gain.gain.setValueAtTime(0.1, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                    osc.start(now); osc.stop(now + 0.1);
+                } else if (type === 'challenge') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(500, now);
+                    osc.frequency.linearRampToValueAtTime(800, now + 0.1);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.linearRampToValueAtTime(0, now + 0.4);
+                    osc.start(now); osc.stop(now + 0.4);
+                } else if (type === 'win') {
+                    osc.type = 'sine';
+                    const notes = [523.25, 659.25, 783.99, 1046.50];
+                    notes.forEach((freq, i) => {
+                        const o = audioCtx.createOscillator();
+                        const g = audioCtx.createGain();
+                        o.type = 'sine';
+                        o.frequency.value = freq;
+                        o.connect(g); g.connect(audioCtx.destination);
+                        g.gain.setValueAtTime(0.15, now + i * 0.15);
+                        g.gain.exponentialRampToValueAtTime(0.01, now + i * 0.15 + 0.3);
+                        o.start(now + i * 0.15); o.stop(now + i * 0.15 + 0.3);
+                    });
+                } else if (type === 'fail') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(300, now);
+                    osc.frequency.linearRampToValueAtTime(150, now + 0.3);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.linearRampToValueAtTime(0, now + 0.3);
+                    osc.start(now); osc.stop(now + 0.3);
+                } else if (type === 'success') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(600, now);
+                    osc.frequency.linearRampToValueAtTime(900, now + 0.1);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.linearRampToValueAtTime(0, now + 0.3);
+                    osc.start(now); osc.stop(now + 0.3);
+                }
+            } catch (e) {
+                // Ignore audio errors quietly
+            }
+        }
+
+        // --- Initialization ---
+        function selectPlayerCount(num) {
+            numPlayers = num;
+            document.getElementById('player-count-selection').classList.add('hidden');
+            document.getElementById('avatar-selection').classList.remove('hidden');
+            renderAvatarChoices();
+        }
+
+        function renderAvatarChoices() {
+            const container = document.getElementById('avatar-grid');
+            container.innerHTML = '';
+            const currentPlayerChoosing = selectedAvatars.length + 1;
+            document.getElementById('choosing-player-text').innerText = `請選擇 玩家 ${currentPlayerChoosing} 的角色`;
+
+            tempAvailableAvatars.forEach(avatar => {
+                const btn = document.createElement('button');
+                btn.className = "text-5xl hover:scale-110 transition transform p-2 rounded-xl border-2 border-transparent hover:border-blue-300";
+                btn.innerText = avatar;
+                btn.onclick = () => chooseAvatar(avatar);
+                container.appendChild(btn);
+            });
+        }
+
+        function chooseAvatar(avatar) {
+            selectedAvatars.push(avatar);
+            tempAvailableAvatars = tempAvailableAvatars.filter(a => a !== avatar);
+            if (selectedAvatars.length < numPlayers) {
+                renderAvatarChoices();
+            } else {
+                startGame();
+            }
+        }
+
+        function startGame() {
+            initAudio();
+            players = [];
+            for (let i = 0; i < numPlayers; i++) {
+                players.push({
+                    id: i,
+                    avatar: selectedAvatars[i],
+                    position: 1
+                });
+            }
+            
+            generateTrapBlocks(); 
+
+            document.getElementById('setup-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('hidden');
+            document.getElementById('game-screen').classList.add('flex');
+            
+            buildBoard();
+            updateStatusUI();
+            placeAvatars();
+            
+            unlockTurn();
+        }
+
+        function buildBoard() {
+            const board = document.getElementById('board');
+            board.innerHTML = '';
+            
+            for (let row = 7; row >= 0; row--) {
+                for (let col = 0; col < 8; col++) {
+                    let cellNum;
+                    if (row % 2 === 0) {
+                        cellNum = row * 8 + col + 1;
+                    } else {
+                        cellNum = row * 8 + (7 - col) + 1;
+                    }
+
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.id = `cell-${cellNum}`;
+                    
+                    if (trapBlocks.includes(cellNum)) {
+                        cell.classList.add('cell-trap', 'border-2', 'border-purple-400');
+                    } else if (cellNum > 1 && cellNum % 5 === 0) {
+                        cell.classList.add('cell-hard', 'border-2', 'border-red-300');
+                    } else if (cellNum > 1 && cellNum % 2 === 0) {
+                        cell.classList.add('cell-mini', 'border-2', 'border-yellow-400');
+                    }
+
+                    const label = document.createElement('span');
+                    label.className = 'cell-number';
+                    label.innerText = cellNum;
+                    cell.appendChild(label);
+
+                    if (trapBlocks.includes(cellNum)) {
+                        const icon = document.createElement('span');
+                        icon.innerHTML = '🔙';
+                        icon.className = 'absolute bottom-1 right-1 text-xs opacity-50';
+                        cell.appendChild(icon);
+                    } else if (cellNum > 1 && cellNum % 5 === 0) {
+                        const icon = document.createElement('span');
+                        icon.innerHTML = '🔥';
+                        icon.className = 'absolute bottom-1 right-1 text-xs opacity-50';
+                        cell.appendChild(icon);
+                    } else if (cellNum > 1 && cellNum % 2 === 0) {
+                        const icon = document.createElement('span');
+                        icon.innerHTML = '⚡';
+                        icon.className = 'absolute bottom-1 right-1 text-xs opacity-50';
+                        cell.appendChild(icon);
+                    }
+
+                    board.appendChild(cell);
+                }
+            }
+        }
+
+        function updateStatusUI() {
+            if (players.length > 0 && players[currentPlayerIndex]) {
+                document.getElementById('current-turn-display').innerText = players[currentPlayerIndex].avatar;
+            }
+        }
+
+        function placeAvatars() {
+            document.querySelectorAll('.avatar').forEach(el => el.remove());
+            
+            players.forEach(p => {
+                const cell = document.getElementById(`cell-${p.position}`);
+                if (cell) {
+                    const avatarEl = document.createElement('div');
+                    avatarEl.className = 'avatar';
+                    avatarEl.id = `avatar-${p.id}`;
+                    avatarEl.innerText = p.avatar;
+                    cell.appendChild(avatarEl);
+                }
+            });
+        }
+
+        const delay = ms => new Promise(res => setTimeout(res, ms));
+
+        // --- Core Game Logic ---
+        async function takeTurn() {
+            if (isMoving) return;
+            isMoving = true;
+            
+            const btn = document.getElementById('roll-btn');
+            const resultDisplay = document.getElementById('dice-result');
+            
+            if (btn) {
+                btn.disabled = true;
+                btn.classList.add('opacity-50', 'cursor-not-allowed');
+            }
+            
+            try {
+                initAudio();
+                if (resultDisplay) {
+                    resultDisplay.classList.add('dice-anim');
+                    resultDisplay.innerText = '';
+                }
+                
+                let roll = 1;
+                for (let i = 0; i < 10; i++) {
+                    playSound('dice');
+                    roll = Math.floor(Math.random() * 6) + 1;
+                    if (resultDisplay) resultDisplay.innerText = `🎲 ${roll}`;
+                    await delay(50);
+                }
+                
+                if (resultDisplay) {
+                    resultDisplay.classList.remove('dice-anim');
+                    resultDisplay.innerText = `得 ${roll} 步!`;
+                }
+                await delay(500);
+
+                const player = players[currentPlayerIndex];
+                if (!player) {
+                    unlockTurn();
+                    return;
+                }
+
+                const targetPos = Math.min(64, player.position + roll);
+                
+                while (player.position < targetPos) {
+                    player.position++;
+                    placeAvatars();
+                    playSound('step');
+                    
+                    const activeAvatar = document.getElementById(`avatar-${player.id}`);
+                    if (activeAvatar) {
+                        activeAvatar.classList.remove('bounce');
+                        void activeAvatar.offsetWidth;
+                        activeAvatar.classList.add('bounce');
+                    }
+                    
+                    updateStatusUI();
+                    await delay(300);
+                }
+
+                if (player.position >= 64) {
+                    playSound('win');
+                    document.getElementById('win-message').innerText = `${player.avatar} 贏得了探險！`;
+                    document.getElementById('win-modal').classList.remove('hidden');
+                    isMoving = false;
+                    return;
+                }
+
+                await checkSpaceEvent(player);
+            } catch (err) {
+                console.error("Error during turn processing:", err);
+                unlockTurn();
+            }
+        }
+
+        async function checkSpaceEvent(player) {
+            const pos = player.position;
+            
+            if (trapBlocks.includes(pos)) {
+                await triggerBackwardTrap(player);
+            } else if (pos > 1 && pos % 5 === 0) {
+                triggerChallenge(player, 'hard');
+            } else if (pos > 1 && pos % 2 === 0) {
+                triggerChallenge(player, 'mini');
+            } else {
+                nextTurn();
+            }
+        }
+
+        async function triggerBackwardTrap(player) {
+            playSound('fail');
+            const resultDisplay = document.getElementById('dice-result');
+            if (resultDisplay) {
+                resultDisplay.innerText = `踩中陷阱 ${player.position}！後退 4 步！`;
+                resultDisplay.classList.add('text-red-600');
+            }
+            
+            await delay(1500);
+            
+            const targetPos = Math.max(1, player.position - 4);
+            
+            while (player.position > targetPos) {
+                player.position--;
+                placeAvatars();
+                playSound('step');
+                
+                const activeAvatar = document.getElementById(`avatar-${player.id}`);
+                if (activeAvatar) {
+                    activeAvatar.classList.remove('bounce');
+                    void activeAvatar.offsetWidth;
+                    activeAvatar.classList.add('bounce');
+                }
+                
+                updateStatusUI();
+                await delay(300);
+            }
+            
+            if (resultDisplay) {
+                resultDisplay.classList.remove('text-red-600');
+            }
+            
+            nextTurn();
+        }
+
+        function triggerChallenge(player, type) {
+            playSound('challenge');
+            
+            const modal = document.getElementById('challenge-modal');
+            const title = document.getElementById('challenge-title');
+            const icon = document.getElementById('challenge-icon');
+            const taskText = document.getElementById('challenge-task');
+            const wordsContainer = document.getElementById('challenge-words');
+            
+            if (type === 'hard') {
+                title.innerText = "🔥 大挑戰！";
+                title.className = "text-3xl font-black text-red-600 mb-4 tracking-wide";
+                icon.innerText = "🔥";
+                
+                let rawTask = CHALLENGES_DB[Math.floor(Math.random() * CHALLENGES_DB.length)];
+                let num = Math.floor(Math.random() * 8) + 3;
+                taskText.innerText = rawTask.replaceAll('X', num);
+            } else {
+                title.innerText = "⚡ 小挑戰！";
+                title.className = "text-3xl font-black text-yellow-600 mb-4 tracking-wide";
+                icon.innerText = "⚡";
+                
+                let rawTask = miniChallenges[Math.floor(Math.random() * miniChallenges.length)];
+                let num = Math.floor(Math.random() * 10) + 1;
+                taskText.innerText = rawTask.replaceAll('X', num);
+            }
+
+            // Only show 1 sentence to read aloud
+            let wordCount = 1;
+            let shuffledWords = shuffleArray(speechWords);
+            currentChallengeWords = shuffledWords.slice(0, wordCount);
+            
+            wordsContainer.innerHTML = '';
+            currentChallengeWords.forEach(word => {
+                const span = document.createElement('span');
+                span.className = 'bg-white px-4 py-3 rounded-lg text-2xl font-black tracking-wider text-blue-700 shadow-sm border-2 border-blue-200 w-full block text-center';
+                span.innerText = word;
+                wordsContainer.appendChild(span);
+            });
+
+            modal.classList.remove('hidden');
+        }
+
+        async function resolveChallenge(success) {
+            const modal = document.getElementById('challenge-modal');
+            if (modal) modal.classList.add('hidden');
+            
+            const player = players[currentPlayerIndex];
+            if (!player) {
+                nextTurn();
+                return;
+            }
+            
+            const resultDisplay = document.getElementById('dice-result');
+            if (success) {
+                playSound('success');
+                player.position = Math.min(64, player.position + 1);
+                if (resultDisplay) resultDisplay.innerText = `獎勵 +1 步!`;
+            } else {
+                playSound('fail');
+                player.position = Math.max(1, player.position - 1);
+                if (resultDisplay) resultDisplay.innerText = `後退 -1 步!`;
+            }
+            
+            placeAvatars();
+            updateStatusUI();
+            
+            const activeAvatar = document.getElementById(`avatar-${player.id}`);
+            if (activeAvatar) {
+                activeAvatar.classList.remove('bounce');
+                void activeAvatar.offsetWidth;
+                activeAvatar.classList.add('bounce');
+            }
+
+            await delay(1000);
+            
+            if (player.position >= 64) {
+                playSound('win');
+                document.getElementById('win-message').innerText = `${player.avatar} 贏得了探險！`;
+                document.getElementById('win-modal').classList.remove('hidden');
+                isMoving = false;
+                return;
+            }
+
+            nextTurn();
+        }
+
+        function unlockTurn() {
+            isMoving = false;
+            const btn = document.getElementById('roll-btn');
+            if (btn) {
+                btn.disabled = false;
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        function nextTurn() {
+            currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+            updateStatusUI();
+            const resultDisplay = document.getElementById('dice-result');
+            if (resultDisplay) resultDisplay.innerText = '';
+            unlockTurn();
+        }
+
+        function resetGame() {
+            document.getElementById('win-modal').classList.add('hidden');
+            document.getElementById('game-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('flex');
+            
+            // Reset state
+            selectedAvatars = [];
+            tempAvailableAvatars = [...availableAvatars];
+            players = [];
+            currentPlayerIndex = 0;
+            isMoving = false;
+            
+            // Go back to setup
+            document.getElementById('setup-screen').classList.remove('hidden');
+            document.getElementById('player-count-selection').classList.remove('hidden');
+            document.getElementById('avatar-selection').classList.add('hidden');
+            
+            const resultDisplay = document.getElementById('dice-result');
+            if (resultDisplay) resultDisplay.innerText = '';
+        }
+    </script>
+</body>
+</html>
